@@ -1,0 +1,8 @@
+target: 2025-11-22 00:00:00
+interval: 100
+precision: 5
+header: Header
+footer: Footer
+header_fontsize: 50
+time_fontsize: 100
+footer_fontsize: 50
