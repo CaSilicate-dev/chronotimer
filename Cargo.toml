@@ -13,5 +13,4 @@ serde_yaml = "0.9.34"
 utils = { path = "./libs/utils"}
 
 [profile.release]
-opt-level = "s"
 lto = true

@@ -114,12 +114,14 @@ fn main() {
     let label2_clone = label2.clone();
 
     let (sender, receiver) = std::sync::mpsc::channel::<String>();
-    glib::idle_add_local(move || match receiver.try_recv() {
+    glib::timeout_add_local(Duration::from_millis((interval as f64 * 0.8) as u64),move || match receiver.try_recv() {
         Ok(a) => {
             label2_clone.set_text(a.as_str());
             glib::ControlFlow::Continue
         }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Empty) => {
+            glib::ControlFlow::Continue
+        },
         Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
     });
 
@@ -154,7 +156,7 @@ fn main() {
             if thread_exit_flag_clone.load(Ordering::Relaxed) {
                 break ;
             }
-            thread::sleep(Duration::from_micros(((interval*1000) / 2) as u64));
+            thread::sleep(Duration::from_millis((interval as f64 * 0.8) as u64));
         }
     });
 
