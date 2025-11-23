@@ -1,29 +1,31 @@
+use chrono::Utc;
 use gtk::pango;
-use gtk::prelude::{BuilderExtManual};
-use gtk::traits::{LabelExt, WidgetExt};
+use gtk::prelude::BuilderExtManual;
+use gtk::traits::{GtkWindowExt, LabelExt, WidgetExt};
 use gtk::{Builder, Label, Window};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use chrono::{Utc};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
     target: String,
     interval: i32,
     precision: i32,
-
     header: String,
     footer: String,
-
     header_fontsize: i32,
     time_fontsize: i32,
-    footer_fontsize:i32,
+    footer_fontsize: i32,
+    window_title: String,
+    window_width: i32,
+    window_height: i32,
+    unit: String,
 }
 impl Default for ConfigFile {
     fn default() -> Self {
@@ -36,66 +38,62 @@ impl Default for ConfigFile {
             header_fontsize: 50,
             time_fontsize: 50,
             footer_fontsize: 50,
+            window_title: "ChronoTimer".to_string(),
+            window_width: 200,
+            window_height: 250,
+            unit: "d".to_string(),
         }
     }
 }
 
-fn change_fontsize(label: &Label, fontsize: i32){
+fn change_fontsize(label: &Label, fontsize: i32) {
     let attr_list = pango::AttrList::new();
-    let fontdesc = pango::FontDescription::from_string(format!("Sans {}", fontsize.to_string()).as_str());
+    let fontdesc =
+        pango::FontDescription::from_string(format!("Sans {}", fontsize.to_string()).as_str());
     attr_list.insert(pango::AttrFontDesc::new(&fontdesc));
 
     label.set_attributes(Some(&attr_list));
 }
 
 fn main() {
-    let file_content = match std::fs::read_to_string("config.yaml") {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("Failed to read config file: {}", e);
-            let config_init = ConfigFile::default();
-            let config_str = serde_yaml::to_string(&config_init).unwrap();
-            let mut file = match File::create("config.yaml") {
-                Ok(a) => a,
-                Err(e) => {
-                    eprintln!("Failed to create config file: {}", e);
-                    std::process::exit(1);
-                }
-            };
-            match file.write_all(config_str.as_bytes()) {
-                Ok(_) => {},
-                Err(e) => {
-                    eprintln!("Failed to write config file: {}", e);
-                    std::process::exit(1);
-                }
-            };
-            match fs::read_to_string("config.yaml") {
-                Ok(a) => a,
-                Err(e) => {
-                    eprintln!("Failed to read config file: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
-    };
-    let config: ConfigFile = match serde_yaml::from_str(file_content.as_str()) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("Failed to parse config file: {}", e);
+    let file_content = std::fs::read_to_string("config.yaml").unwrap_or_else(|e| {
+        eprintln!("Failed to read config file: {}", e);
+        let config_init = ConfigFile::default();
+        let config_str = serde_yaml::to_string(&config_init).unwrap();
+        let mut file = File::create("config.yaml").unwrap_or_else(|e| {
+            eprintln!("Failed to create config file: {}", e);
             std::process::exit(1);
-        }
-    };
+        });
+        file.write_all(config_str.as_bytes()).unwrap_or_else(|e| {
+            eprintln!("Failed to write config file: {}", e);
+            std::process::exit(1);
+        });
+        fs::read_to_string("config.yaml").unwrap_or_else(|e| {
+            eprintln!("Failed to read config file: {}", e);
+            std::process::exit(1);
+        })
+    });
+
+    let config: ConfigFile = serde_yaml::from_str(file_content.as_str()).unwrap_or_else(|e| {
+        eprintln!("Failed to parse config file: {}", e);
+        std::process::exit(1);
+    });
 
     let target = config.target;
     let interval = config.interval;
     let precision = config.precision;
 
-    let header=  config.header;
+    let header = config.header;
     let footer = config.footer;
 
     let header_fontsize = config.header_fontsize;
     let time_fontsize = config.time_fontsize;
     let footer_fontsize = config.footer_fontsize;
+
+    let window_title = config.window_title;
+    let window_width = config.window_width;
+    let window_height = config.window_height;
+    let unit = config.unit;
 
     gtk::init().unwrap();
 
@@ -109,25 +107,31 @@ fn main() {
 
     let exit_flag = Arc::new(AtomicBool::new(false));
     let exit_flag_clone = exit_flag.clone();
+    let exit_flag_clone2 = exit_flag.clone();
     let thread_exit_flag_clone = exit_flag.clone();
 
     let label2_clone = label2.clone();
 
     let (sender, receiver) = std::sync::mpsc::channel::<String>();
-    glib::timeout_add_local(Duration::from_millis((interval as f64 * 0.8) as u64),move || match receiver.try_recv() {
-        Ok(a) => {
-            label2_clone.set_text(a.as_str());
-            glib::ControlFlow::Continue
-        }
-        Err(mpsc::TryRecvError::Empty) => {
-            glib::ControlFlow::Continue
+    glib::timeout_add_local(
+        Duration::from_millis((interval as f64 * 0.8) as u64),
+        move || match receiver.try_recv() {
+            Ok(a) => {
+                label2_clone.set_text(a.as_str());
+                glib::ControlFlow::Continue
+            }
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
         },
-        Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
-    });
+    );
 
     label1.set_text(header.as_str());
     label3.set_text(footer.as_str());
-    
+    main_window.set_title(window_title.as_str());
+    main_window.set_size_request(window_width, window_height);
+    label1.set_height_request((window_height as f64 * 0.2) as i32);
+    label2.set_height_request((window_height as f64 * 0.6) as i32);
+    label3.set_height_request((window_height as f64 * 0.2) as i32);
     change_fontsize(&label1, header_fontsize);
     change_fontsize(&label2, time_fontsize);
     change_fontsize(&label3, footer_fontsize);
@@ -141,30 +145,41 @@ fn main() {
             let looptimer_current = Utc::now().timestamp_millis();
             if looptimer_current - (looptimer_start + ((repeat_times * interval) as i64)) >= 0 {
                 repeat_times += 1;
-                let target_timestamp = match utils::convert_timestamp(target_clone2) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        eprintln!("Failed to parse target time: {}", e);
-                        std::process::exit(1);
-                    }
-                };
+                let target_timestamp =
+                    utils::convert_timestamp(target_clone2).unwrap_or_else(|e| {
+                        sender
+                            .send(format!("Failed to parse target time: {}", e))
+                            .unwrap();
+                        exit_flag_clone.store(true, Ordering::Relaxed);
+                        -1
+                    });
                 let current_timestamp = Utc::now().timestamp_millis();
-                let delta = ((target_timestamp - current_timestamp) as f64) / 86400000_f64;
-                let rounded_delta = utils::advanced_round(delta, precision).to_string();
-                sender.send(rounded_delta).unwrap();
+                let delta = (target_timestamp - current_timestamp) as f64;
+                let remaining =
+                    utils::convert_time_unit(delta, unit.as_str()).unwrap_or_else(|e| {
+                        sender.send(format!("{}", e)).unwrap();
+                        exit_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+                        -1.0
+                    });
+                let rounded_remaining = utils::advanced_round(remaining, precision);
+                let formated_delta = utils::format_zeros(rounded_remaining, precision);
+                if !thread_exit_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                    sender.send(formated_delta).unwrap();
+                }
             }
             if thread_exit_flag_clone.load(Ordering::Relaxed) {
-                break ;
+                break;
             }
             thread::sleep(Duration::from_millis((interval as f64 * 0.8) as u64));
         }
     });
 
     main_window.connect_destroy(move |_| {
-        exit_flag_clone.store(true, Ordering::Relaxed);
+        exit_flag_clone2.store(true, Ordering::Relaxed);
         gtk::main_quit()
     });
 
+    main_window.set_resizable(false);
 
     main_window.show_all();
     gtk::main();
