@@ -1,4 +1,5 @@
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use chrono::{Datelike, NaiveDateTime, TimeZone, Timelike, Utc};
+use std::cmp::min;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -13,6 +14,47 @@ impl InvalidUnitError {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct SplitedTime {
+    pub year: i32,
+    pub month: i32,
+    pub day: i32,
+    pub hour: i32,
+    pub minute: i32,
+    pub second: i32,
+}
+impl SplitedTime {
+    pub fn new(year: i32, month: i32, day: i32, hour: i32, minute: i32, second: i32) -> Self {
+        Self {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+        }
+    }
+
+    pub fn from_string(datetime: String) -> Result<Self, chrono::ParseError> {
+        let dt = NaiveDateTime::parse_from_str(datetime.as_str(), "%Y-%m-%d %H:%M:%S")?;
+        Ok(Self {
+            year: dt.year(),
+            month: dt.month() as i32,
+            day: dt.day() as i32,
+            hour: dt.hour() as i32,
+            minute: dt.minute() as i32,
+            second: dt.second() as i32,
+        })
+    }
+
+    pub fn to_string(self) -> String {
+        format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            self.year, self.month, self.day,
+            self.hour, self.minute, self.second)
+    }
+}
+
 pub fn convert_timestamp(date_str: String) -> Result<i64, chrono::ParseError> {
     let naive_datetime = NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")?;
     let datetime_utc = Utc.from_local_datetime(&naive_datetime).unwrap();
