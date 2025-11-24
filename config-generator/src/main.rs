@@ -4,8 +4,6 @@ use gtk::prelude::BuilderExtManual;
 use serde;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
-use chrono::{Datelike, NaiveDateTime, Timelike};
-use gtk::gdk::keys::constants::q;
 use utils::SplitedTime;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -132,7 +130,7 @@ fn main() {
         let filename = file.to_string_lossy().into_owned();
         let filecontent = std::fs::read_to_string(filename).unwrap();
         let config: ConfigFile = serde_yaml::from_str(filecontent.as_str()).unwrap();
-        let splitedtime = match utils::SplitedTime::from_string(config.target) {
+        let splitedtime = match SplitedTime::from_string(config.target) {
             Ok(a) => a,
             Err(_) => {
                 statusi.set_text(langconf.failed_to_parse_time.as_str());
@@ -145,7 +143,7 @@ fn main() {
         mainwin.h.clone().set_value(splitedtime.hour as f64);
         mainwin.m.clone().set_value(splitedtime.minute as f64);
         mainwin.s.clone().set_value(splitedtime.second as f64);
-        mainwin.code.clone().set_text(utils::SplitedTime::to_string(splitedtime).as_str());
+        mainwin.code.clone().set_text(SplitedTime::to_string(splitedtime).as_str());
         mainwin.itvl.clone().set_value(config.interval as f64);
         mainwin.prec.clone().set_value(config.precision as f64);
         mainwin.header.clone().set_text(config.header.as_str());
@@ -329,7 +327,7 @@ fn main() {
             },
         };
         let filename = file.to_string_lossy().into_owned();
-        std::fs::write(file, confile_text).unwrap();
+        std::fs::write(filename, confile_text).unwrap();
     });
     mainwin.main_window.show_all();
     gtk::main();

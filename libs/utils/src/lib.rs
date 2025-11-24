@@ -1,5 +1,4 @@
 use chrono::{Datelike, NaiveDateTime, TimeZone, Timelike, Utc};
-use std::cmp::min;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
