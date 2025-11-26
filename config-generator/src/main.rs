@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use gtk::prelude::BuilderExtManual;
 use gtk::prelude::*;
 use gtk::{Builder, Button, Entry, FileChooserButton, Label, RadioButton, SpinButton, Window};

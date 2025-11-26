@@ -10,3 +10,6 @@ gtk = "0.18.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
 utils = { path = "../libs/utils" }
+
+[profile.release]
+lto = true
