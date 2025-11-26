@@ -24,15 +24,38 @@
 2. 第一次运行自动生成 yaml 格式配置文件
 3. 运行主程序
 
+## 构建步骤
+
+### 构建要求
+- Rust 工具链最新版本
+
+### 构建命令
+```bash
+
+git clone https://github.com/CaSilicate-dev/chronotimer
+cd chronotimer
+cargo build --release
+```
+
+二进制文件位于./target/release/chronotimer
+
 ---
 
 ## 开源许可证
 
 本项目使用 [GPLv3 LICENSE](https://github.com/CaSilicate-dev/chronotimer/blob/main/LICENSE) 开源协议
 
+**根据GPLv3条款:**
+- 你可以自由使用、修改和分发本软件
+- 如果你分发修改版本，必须同样使用GPLv3许可证
+- 分发二进制文件时必须提供对应的源代码
+
 ## 源码
 
-[https://github.com/CaSilicate-dev/chronotimer]()
+您可以通过以下方式获取本程序的源代码：
+- 随本分发的 source-code.zip
+- GitHub: https://github.com/CaSilicate-dev/chronotimer
+- 通过电子邮件向作者索取
 
 ---
 
@@ -42,4 +65,4 @@
 
 ## 注意事项
 
-本项目的主要开发与适配环境为 Linux。对于其他平台上出现的问题，我们通常**无法提供支持**，建议优先在 Linux 环境下进行验证。
+本项目的主要开发与适配环境为 Linux 。对于其他平台上出现的问题，我们通常**无法提供支持**，建议优先在 Linux 环境下进行验证。
