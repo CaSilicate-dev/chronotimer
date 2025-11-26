@@ -1,9 +1,10 @@
-use gtk::prelude::*;
-use gtk::{Builder, Window, FileChooserButton, Button, SpinButton, Entry, RadioButton, Label};
 use gtk::prelude::BuilderExtManual;
+use gtk::prelude::*;
+use gtk::{Builder, Button, Entry, FileChooserButton, Label, RadioButton, SpinButton, Window};
 use serde;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
+use std::rc::Rc;
 use utils::SplitedTime;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -26,6 +27,10 @@ struct Lang {
     no_such_file: String,
     failed_to_parse_time: String,
     invalid_time_unit: String,
+    failed_to_read_file: String,
+    failed_to_parse_config: String,
+    failed_to_parse_input: String,
+    failed_to_write_file: String,
 }
 #[derive(Clone)]
 struct MainWindow {
@@ -78,9 +83,14 @@ impl MainWindow {
             openf: builder.object("openf").unwrap(),
             savef: builder.object("savef").unwrap(),
             radios: [
-                builder.object("msrd").unwrap(), builder.object("srd").unwrap(), builder.object("mrd").unwrap(),
-                builder.object("hrd").unwrap(), builder.object("drd").unwrap(), builder.object("wrd").unwrap(),
-                builder.object("mord").unwrap(), builder.object("yrd").unwrap(),
+                builder.object("msrd").unwrap(),
+                builder.object("srd").unwrap(),
+                builder.object("mrd").unwrap(),
+                builder.object("hrd").unwrap(),
+                builder.object("drd").unwrap(),
+                builder.object("wrd").unwrap(),
+                builder.object("mord").unwrap(),
+                builder.object("yrd").unwrap(),
             ],
             statusi: builder.object("statusi").unwrap(),
         }
@@ -88,9 +98,23 @@ impl MainWindow {
     fn get_selected_radio(&self) -> Option<RadioButton> {
         self.radios.iter().find(|r| r.is_active()).cloned()
     }
+    fn get_splitedtime(&self) -> SplitedTime {
+        SplitedTime {
+            year: self.y.value() as i32,
+            month: self.mo.value() as i32,
+            day: self.d.value() as i32,
+            hour: self.h.value() as i32,
+            minute: self.m.value() as i32,
+            second: self.s.value() as i32,
+        }
+    }
+    fn update_timecode(&self) {
+        let mainwin = &self;
+        let splitedtime = self.get_splitedtime();
+        let code = SplitedTime::to_string(splitedtime);
+        mainwin.code.set_text(code.as_str());
+    }
 }
-
-
 fn main() {
     gtk::init().unwrap();
     println!("Hello, world!");
@@ -100,234 +124,230 @@ fn main() {
 
     let langconfct = include_str!("../assets/lang.yaml");
     let langconf: Lang = serde_yaml::from_str(langconfct).unwrap();
-    let langconf_c1 = langconf.clone();
+    let langconf = Rc::new(langconf);
 
     let mainwin = MainWindow::new(&builder);
+    let mainwin = Rc::new(mainwin);
+
     let mainwin_c1 = mainwin.clone();
-    let mainwin_c2 = mainwin.clone();
-    let mainwin_c3 = mainwin.clone();
-    let mainwin_c4 = mainwin.clone();
-    let mainwin_c5 = mainwin.clone();
-    let mainwin_c6 = mainwin.clone();
-    let mainwin_c7 = mainwin.clone();
-    let mainwin_c8 = mainwin.clone();
-    let mainwin_c9 = mainwin.clone();
-    let mainwin_c10 = mainwin.clone();
-    let mainwin_c11 = mainwin.clone();
-    let mainwin_c12 = mainwin.clone();
-    let mainwin_c13 = mainwin.clone();
-    let mainwin_c14 = mainwin.clone();
-    mainwin.openf.connect_clicked(move |_| {
-        let filec = mainwin.filec.clone();
-        let statusi = mainwin.statusi.clone();
-        let file = match filec.filename() {
-            Some(a) => a,
-            None => {
-                statusi.set_text(langconf.no_such_file.as_str());
-                return;
-            },
-        };
-        let filename = file.to_string_lossy().into_owned();
-        let filecontent = std::fs::read_to_string(filename).unwrap();
-        let config: ConfigFile = serde_yaml::from_str(filecontent.as_str()).unwrap();
-        let splitedtime = match SplitedTime::from_string(config.target) {
-            Ok(a) => a,
-            Err(_) => {
-                statusi.set_text(langconf.failed_to_parse_time.as_str());
+    mainwin_c1.openf.connect_clicked({
+
+        let mainwin_clone = mainwin.clone();
+        let langconf_clone = langconf.clone();
+        move |_| {
+            let filec = mainwin_clone.filec.clone();
+            let statusi = mainwin_clone.statusi.clone();
+            let file = match filec.filename() {
+                Some(a) => a,
+                None => {
+                    statusi.set_text(langconf_clone.no_such_file.as_str());
+                    return;
+                }
+            };
+            let filename = file.to_string_lossy().into_owned();
+            let filecontent = match std::fs::read_to_string(filename) {
+                Ok(a) => a,
+                Err(_) => {
+                    statusi.set_text(langconf_clone.failed_to_read_file.as_str());
+                    return;
+                }
+            };
+            let config: ConfigFile = match serde_yaml::from_str(filecontent.as_str()) {
+                Ok(a) => a,
+                Err(_) => {
+                    statusi.set_text(langconf_clone.failed_to_parse_config.as_str());
+                    return;
+                }
+            };
+            let splitedtime = match SplitedTime::from_string(config.target) {
+                Ok(a) => a,
+                Err(_) => {
+                    statusi.set_text(langconf_clone.failed_to_parse_time.as_str());
+                    return;
+                }
+            };
+            mainwin_clone.y.clone().set_value(splitedtime.year as f64);
+            mainwin_clone.mo.clone().set_value(splitedtime.month as f64);
+            mainwin_clone.d.clone().set_value(splitedtime.day as f64);
+            mainwin_clone.h.clone().set_value(splitedtime.hour as f64);
+            mainwin_clone.m.clone().set_value(splitedtime.minute as f64);
+            mainwin_clone.s.clone().set_value(splitedtime.second as f64);
+            mainwin_clone
+                .code
+                .clone()
+                .set_text(SplitedTime::to_string(splitedtime).as_str());
+            mainwin_clone.itvl.clone().set_value(config.interval as f64);
+            mainwin_clone.prec.clone().set_value(config.precision as f64);
+            mainwin_clone.header.clone().set_text(config.header.as_str());
+            mainwin_clone.footer.clone().set_text(config.footer.as_str());
+            mainwin_clone.hfs.clone().set_value(config.header_fontsize as f64);
+            mainwin_clone.tfs.clone().set_value(config.time_fontsize as f64);
+            mainwin_clone.ffs.clone().set_value(config.footer_fontsize as f64);
+            mainwin_clone
+                .wintitle
+                .clone()
+                .set_text(config.window_title.as_str());
+            mainwin_clone
+                .winwidth
+                .clone()
+                .set_value(config.window_width as f64);
+            mainwin_clone
+                .winhet
+                .clone()
+                .set_value(config.window_height as f64);
+
+            let timeunit = config.unit;
+            if timeunit == "ms" {
+                mainwin_clone.radios[0].set_active(true);
+            } else if timeunit == "s" {
+                mainwin_clone.radios[1].set_active(true);
+            } else if timeunit == "m" {
+                mainwin_clone.radios[2].set_active(true);
+            } else if timeunit == "h" {
+                mainwin_clone.radios[3].set_active(true);
+            } else if timeunit == "d" {
+                mainwin_clone.radios[4].set_active(true);
+            } else if timeunit == "w" {
+                mainwin_clone.radios[5].set_active(true);
+            } else if timeunit == "mo" {
+                mainwin_clone.radios[6].set_active(true);
+            } else if timeunit == "y" {
+                mainwin_clone.radios[7].set_active(true);
+            } else {
+                statusi.set_text(langconf_clone.invalid_time_unit.as_str());
                 return;
             }
-        };
-        mainwin.y.clone().set_value(splitedtime.year as f64);
-        mainwin.mo.clone().set_value(splitedtime.month as f64);
-        mainwin.d.clone().set_value(splitedtime.day as f64);
-        mainwin.h.clone().set_value(splitedtime.hour as f64);
-        mainwin.m.clone().set_value(splitedtime.minute as f64);
-        mainwin.s.clone().set_value(splitedtime.second as f64);
-        mainwin.code.clone().set_text(SplitedTime::to_string(splitedtime).as_str());
-        mainwin.itvl.clone().set_value(config.interval as f64);
-        mainwin.prec.clone().set_value(config.precision as f64);
-        mainwin.header.clone().set_text(config.header.as_str());
-        mainwin.footer.clone().set_text(config.footer.as_str());
-        mainwin.hfs.clone().set_value(config.header_fontsize as f64);
-        mainwin.tfs.clone().set_value(config.time_fontsize as f64);
-        mainwin.ffs.clone().set_value(config.footer_fontsize as f64);
-        mainwin.wintitle.clone().set_text(config.window_title.as_str());
-        mainwin.winwidth.clone().set_value(config.window_width as f64);
-        mainwin.winhet.clone().set_value(config.window_height as f64);
-
-        let timeunit = config.unit;
-        if timeunit == "ms" {
-            mainwin.radios[0].set_active(true);
-        } else if timeunit == "s" {
-            mainwin.radios[1].set_active(true);
-        } else if timeunit == "m" {
-            mainwin.radios[2].set_active(true);
-        } else if timeunit == "h" {
-            mainwin.radios[3].set_active(true);
-        } else if timeunit == "d" {
-            mainwin.radios[4].set_active(true);
-        } else if timeunit == "w" {
-            mainwin.radios[5].set_active(true);
-        } else if timeunit == "mo" {
-            mainwin.radios[6].set_active(true);
-        } else if timeunit == "y" {
-            mainwin.radios[7].set_active(true);
-        } else {
-            statusi.set_text(langconf.invalid_time_unit.as_str());
-            return;
         }
     });
 
-    mainwin.main_window.connect_delete_event(move |_, _| {
+    mainwin_c1.main_window.connect_delete_event(move |_, _| {
         gtk::main_quit();
         std::process::exit(0);
     });
 
-    mainwin_c1.y.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c2.y.value() as i32,
-            month: mainwin_c2.mo.value() as i32,
-            day: mainwin_c2.d.value() as i32,
-            hour: mainwin_c2.h.value() as i32,
-            minute: mainwin_c2.m.value() as i32,
-            second: mainwin_c2.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c2.code.set_text(code.as_str());
-    });
 
-    mainwin_c3.mo.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c4.y.value() as i32,
-            month: mainwin_c4.mo.value() as i32,
-            day: mainwin_c4.d.value() as i32,
-            hour: mainwin_c4.h.value() as i32,
-            minute: mainwin_c4.m.value() as i32,
-            second: mainwin_c4.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c4.code.set_text(code.as_str());
-    });
-
-    mainwin_c5.d.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c6.y.value() as i32,
-            month: mainwin_c6.mo.value() as i32,
-            day: mainwin_c6.d.value() as i32,
-            hour: mainwin_c6.h.value() as i32,
-            minute: mainwin_c6.m.value() as i32,
-            second: mainwin_c6.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c6.code.set_text(code.as_str());
-    });
-
-    mainwin_c7.h.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c8.y.value() as i32,
-            month: mainwin_c8.mo.value() as i32,
-            day: mainwin_c8.d.value() as i32,
-            hour: mainwin_c8.h.value() as i32,
-            minute: mainwin_c8.m.value() as i32,
-            second: mainwin_c8.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c8.code.set_text(code.as_str());
-    });
-
-    mainwin_c9.m.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c10.y.value() as i32,
-            month: mainwin_c10.mo.value() as i32,
-            day: mainwin_c10.d.value() as i32,
-            hour: mainwin_c10.h.value() as i32,
-            minute: mainwin_c10.m.value() as i32,
-            second: mainwin_c10.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c10.code.set_text(code.as_str());
-    });
-
-    mainwin_c11.s.connect_changed(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c12.y.value() as i32,
-            month: mainwin_c12.mo.value() as i32,
-            day: mainwin_c12.d.value() as i32,
-            hour: mainwin_c12.h.value() as i32,
-            minute: mainwin_c12.m.value() as i32,
-            second: mainwin_c12.s.value() as i32,
-        };
-        let code = SplitedTime::to_string(splitedtime);
-        mainwin_c12.code.set_text(code.as_str());
-    });
-
-    mainwin_c13.savef.connect_clicked(move |_| {
-        let splitedtime = SplitedTime {
-            year: mainwin_c14.y.value() as i32,
-            month: mainwin_c14.mo.value() as i32,
-            day: mainwin_c14.d.value() as i32,
-            hour: mainwin_c14.h.value() as i32,
-            minute: mainwin_c14.m.value() as i32,
-            second: mainwin_c14.s.value() as i32,
-        };
-        let target = SplitedTime::to_string(splitedtime);
-        let interval = mainwin_c14.itvl.value() as i32;
-        let precision = mainwin_c14.prec.value() as i32;
-        let header = mainwin_c14.header.text().to_string();
-        let footer = mainwin_c14.footer.text().to_string();
-        let hfs = mainwin_c14.hfs.value() as i32;
-        let tfs = mainwin_c14.tfs.value() as i32;
-        let ffs = mainwin_c14.ffs.value() as i32;
-        let wintitle = mainwin_c14.wintitle.text().to_string();
-        let winwidth = mainwin_c14.winwidth.value() as i32;
-        let winhet = mainwin_c14.winhet.value() as i32;
-        let unitradios = mainwin_c14.get_selected_radio().unwrap().buildable_name().unwrap();
-        let timeunit;
-        if unitradios == "msrd" {
-            timeunit = "ms";
-        } else if unitradios == "srd" {
-            timeunit = "s";
-        } else if unitradios == "mrd" {
-            timeunit = "m";
-        } else if unitradios == "hrd" {
-            timeunit = "h";
-        } else if unitradios == "drd" {
-            timeunit = "d";
-        } else if unitradios == "wrd" {
-            timeunit = "w";
-        } else if unitradios == "mord" {
-            timeunit = "m";
-        } else if unitradios == "yrd" {
-            timeunit = "y";
-        } else {
-            timeunit = "d";
+    mainwin_c1.y.connect_changed({
+        let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
         }
-        let configfile = ConfigFile {
-            target,
-            interval,
-            precision,
-            header,
-            footer,
-            header_fontsize: hfs,
-            time_fontsize: tfs,
-            footer_fontsize: ffs,
-            window_title: wintitle,
-            window_width: winwidth,
-            window_height: winhet,
-            unit: timeunit.to_string(),
-        };
-        let confile_text = serde_yaml::to_string(&configfile).unwrap();
-        let filec = mainwin_c14.filec.clone();
-        let statusi = mainwin_c14.statusi.clone();
-        let file = match filec.filename() {
-            Some(a) => a,
-            None => {
-                statusi.set_text(langconf_c1.no_such_file.as_str());
-                return;
-            },
-        };
-        let filename = file.to_string_lossy().into_owned();
-        std::fs::write(filename, confile_text).unwrap();
+    });
+
+    mainwin_c1.mo.connect_changed({
+        let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
+        }
+    });
+
+    mainwin_c1.d.connect_changed({
+                let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
+        }
+    });
+
+    mainwin_c1.h.connect_changed({
+                let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
+        }
+    });
+
+    mainwin_c1.m.connect_changed({
+                let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
+        }
+    });
+
+    mainwin_c1.s.connect_changed({
+                let mainwin = mainwin.clone();
+        move |_| {
+            mainwin.update_timecode();
+        }
+    });
+
+    mainwin_c1.savef.connect_clicked({
+        let mainwin_clone = mainwin.clone();
+        let langconf_clone = langconf.clone();
+        move |_| {
+            let splitedtime = mainwin_clone.get_splitedtime();
+            let target = SplitedTime::to_string(splitedtime);
+            let interval = mainwin_clone.itvl.value() as i32;
+            let precision = mainwin_clone.prec.value() as i32;
+            let header = mainwin_clone.header.text().to_string();
+            let footer = mainwin_clone.footer.text().to_string();
+            let hfs = mainwin_clone.hfs.value() as i32;
+            let tfs = mainwin_clone.tfs.value() as i32;
+            let ffs = mainwin_clone.ffs.value() as i32;
+            let wintitle = mainwin_clone.wintitle.text().to_string();
+            let winwidth = mainwin_clone.winwidth.value() as i32;
+            let winhet = mainwin_clone.winhet.value() as i32;
+            let statusi = mainwin_clone.statusi.clone();
+            let unitradios = mainwin_clone
+                .get_selected_radio()
+                .unwrap()
+                .buildable_name()
+                .unwrap();
+            let timeunit;
+            if unitradios == "msrd" {
+                timeunit = "ms";
+            } else if unitradios == "srd" {
+                timeunit = "s";
+            } else if unitradios == "mrd" {
+                timeunit = "m";
+            } else if unitradios == "hrd" {
+                timeunit = "h";
+            } else if unitradios == "drd" {
+                timeunit = "d";
+            } else if unitradios == "wrd" {
+                timeunit = "w";
+            } else if unitradios == "mord" {
+                timeunit = "m";
+            } else if unitradios == "yrd" {
+                timeunit = "y";
+            } else {
+                timeunit = "d";
+            }
+            let configfile = ConfigFile {
+                target,
+                interval,
+                precision,
+                header,
+                footer,
+                header_fontsize: hfs,
+                time_fontsize: tfs,
+                footer_fontsize: ffs,
+                window_title: wintitle,
+                window_width: winwidth,
+                window_height: winhet,
+                unit: timeunit.to_string(),
+            };
+            let confile_text = match serde_yaml::to_string(&configfile) {
+                Ok(a) => a,
+                Err(_) => {
+                    statusi.set_text(langconf.failed_to_parse_input.as_str());
+                    return;
+                }
+            };
+            let filec = mainwin_clone.filec.clone();
+            let statusi = mainwin_clone.statusi.clone();
+            let file = match filec.filename() {
+                Some(a) => a,
+                None => {
+                    statusi.set_text(langconf_clone.no_such_file.as_str());
+                    return;
+                }
+            };
+            let filename = file.to_string_lossy().into_owned();
+            match std::fs::write(filename, confile_text) {
+                Ok(a) => a,
+                Err(_) => {
+                    statusi.set_text(langconf.failed_to_write_file.as_str());
+                }
+            };
+        }
     });
     mainwin.main_window.show_all();
     gtk::main();

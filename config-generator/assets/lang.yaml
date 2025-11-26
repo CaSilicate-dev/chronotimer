@@ -1,3 +1,7 @@
 no_such_file: "文件不存在"
 failed_to_parse_time: "解析时间失败"
 invalid_time_unit: "无效的时间单位"
+failed_to_read_file: "无法读取文件"
+failed_to_parse_config: "无法解析配置文件"
+failed_to_parse_input: "无法解析输入"
+failed_to_write_file: "无法写入文件"
