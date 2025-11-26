@@ -163,13 +163,15 @@ fn main() {
                     return;
                 }
             };
-            let splitedtime = match SplitedTime::from_string(config.target) {
+            let splitedtime = match SplitedTime::from_string(config.clone().target) {
                 Ok(a) => a,
                 Err(_) => {
                     statusi.set_text(langconf_clone.failed_to_parse_time.as_str());
                     return;
                 }
             };
+            let c = config.clone();
+            println!("{:?}", c);
             mainwin_clone.y.clone().set_value(splitedtime.year as f64);
             mainwin_clone.mo.clone().set_value(splitedtime.month as f64);
             mainwin_clone.d.clone().set_value(splitedtime.day as f64);
@@ -181,25 +183,33 @@ fn main() {
                 .clone()
                 .set_text(SplitedTime::to_string(splitedtime).as_str());
             mainwin_clone.itvl.clone().set_value(config.interval as f64);
+            println!("{}", config.precision);
             mainwin_clone.prec.clone().set_value(config.precision as f64);
+            println!("{}", mainwin_clone.prec.value());
             mainwin_clone.header.clone().set_text(config.header.as_str());
             mainwin_clone.footer.clone().set_text(config.footer.as_str());
             mainwin_clone.hfs.clone().set_value(config.header_fontsize as f64);
             mainwin_clone.tfs.clone().set_value(config.time_fontsize as f64);
             mainwin_clone.ffs.clone().set_value(config.footer_fontsize as f64);
+            println!("{}", mainwin_clone.prec.value());
+
             mainwin_clone
                 .wintitle
                 .clone()
                 .set_text(config.window_title.as_str());
+            println!("{}", mainwin_clone.prec.value());
             mainwin_clone
                 .winwidth
                 .clone()
                 .set_value(config.window_width as f64);
+            println!("{}", mainwin_clone.prec.value());
             mainwin_clone
                 .winhet
                 .clone()
                 .set_value(config.window_height as f64);
+            println!("{}", mainwin_clone.prec.value());
 
+            println!("{}", mainwin_clone.prec.value());
             let timeunit = config.unit;
             if timeunit == "ms" {
                 mainwin_clone.radios[0].set_active(true);
@@ -221,6 +231,7 @@ fn main() {
                 statusi.set_text(langconf_clone.invalid_time_unit.as_str());
                 return;
             }
+            println!("{}", mainwin_clone.prec.value());
         }
     });
 
