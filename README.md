@@ -24,15 +24,21 @@
 2. 第一次运行自动生成 yaml 格式配置文件
 3. 运行主程序
 
+---
+
 ## 开源许可证
 
-本项目使用 MIT License 开源协议
+本项目使用 [GPLv3 LICENSE](https://github.com/CaSilicate-dev/chronotimer/blob/main/LICENSE) 开源协议
+
+## 源码
+
+[https://github.com/CaSilicate-dev/chronotimer]()
+
+---
 
 ## 贡献
 
 欢迎提交 Issue 或 Pull Requests！
-
----
 
 ## 注意事项
 
