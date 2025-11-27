@@ -4,7 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use gtk::prelude::BuilderExtManual;
 use gtk::prelude::*;
-use gtk::{Builder, Button, Entry, FileChooserButton, Label, RadioButton, SpinButton, Window};
+use gtk::{Builder, Button, Entry, FileChooserButton, Label, RadioButton, SpinButton, Window, CheckButton};
 use serde;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
@@ -25,6 +25,14 @@ struct ConfigFile {
     window_width: i32,
     window_height: i32,
     unit: String,
+    clockmode_settings: ClockmodeConfigConfigfile,
+}
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ClockmodeConfigConfigfile {
+    enable: bool,
+    fullscreen: bool,
+    showsecond: bool,
+    fontsize: i32,
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Lang {
@@ -61,6 +69,10 @@ struct MainWindow {
     savef: Button,
     radios: [RadioButton; 8],
     statusi: Label,
+    cm_enable: CheckButton,
+    cm_fs: CheckButton,
+    cm_ss: CheckButton,
+    cm_fonts: SpinButton,
 }
 impl MainWindow {
     fn new(builder: &Builder) -> Self {
@@ -97,6 +109,10 @@ impl MainWindow {
                 builder.object("yrd").unwrap(),
             ],
             statusi: builder.object("statusi").unwrap(),
+            cm_enable: builder.object("cm_enable").unwrap(),
+            cm_fs: builder.object("cm_fs").unwrap(),
+            cm_ss: builder.object("cm_ss").unwrap(),
+            cm_fonts: builder.object("cm_fonts").unwrap(),
         }
     }
     fn get_selected_radio(&self) -> Option<RadioButton> {
@@ -231,6 +247,12 @@ fn main() {
                 statusi.set_text(langconf_clone.invalid_time_unit.as_str());
                 return;
             }
+
+            mainwin_clone.cm_enable.set_active(config.clockmode_settings.enable);
+            mainwin_clone.cm_fs.set_active(config.clockmode_settings.fullscreen);
+            mainwin_clone.cm_ss.set_active(config.clockmode_settings.showsecond);
+            mainwin_clone.cm_fonts.set_value(config.clockmode_settings.fontsize as f64);
+
             println!("{}", mainwin_clone.prec.value());
         }
     });
@@ -256,28 +278,28 @@ fn main() {
     });
 
     mainwin_c1.d.connect_changed({
-                let mainwin = mainwin.clone();
+        let mainwin = mainwin.clone();
         move |_| {
             mainwin.update_timecode();
         }
     });
 
     mainwin_c1.h.connect_changed({
-                let mainwin = mainwin.clone();
+        let mainwin = mainwin.clone();
         move |_| {
             mainwin.update_timecode();
         }
     });
 
     mainwin_c1.m.connect_changed({
-                let mainwin = mainwin.clone();
+        let mainwin = mainwin.clone();
         move |_| {
             mainwin.update_timecode();
         }
     });
 
     mainwin_c1.s.connect_changed({
-                let mainwin = mainwin.clone();
+        let mainwin = mainwin.clone();
         move |_| {
             mainwin.update_timecode();
         }
@@ -325,6 +347,12 @@ fn main() {
             } else {
                 timeunit = "d";
             }
+
+            let cm_enable = mainwin_clone.cm_enable.is_active();
+            let cm_fs = mainwin_clone.cm_fs.is_active();
+            let cm_ss = mainwin_clone.cm_ss.is_active();
+            let cm_fonts = mainwin_clone.cm_fonts.value() as i32;
+
             let configfile = ConfigFile {
                 target,
                 interval,
@@ -338,6 +366,12 @@ fn main() {
                 window_width: winwidth,
                 window_height: winhet,
                 unit: timeunit.to_string(),
+                clockmode_settings: ClockmodeConfigConfigfile {
+                    enable: cm_enable,
+                    fullscreen: cm_fs,
+                    showsecond: cm_ss,
+                    fontsize: cm_fonts,
+                }
             };
             let confile_text = match serde_yaml::to_string(&configfile) {
                 Ok(a) => a,

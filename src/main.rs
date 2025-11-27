@@ -1,10 +1,11 @@
 // Copyright (C) 2024 CaSilicate
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod clockmode;
+
 use chrono::Utc;
-use gtk::pango;
 use gtk::prelude::BuilderExtManual;
 use gtk::traits::{GtkWindowExt, LabelExt, WidgetExt};
 use gtk::{Builder, Label, Window};
@@ -31,6 +32,25 @@ struct ConfigFile {
     window_width: i32,
     window_height: i32,
     unit: String,
+
+    clockmode_settings: ClockmodeConfigConfigfile,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct ClockmodeConfigConfigfile {
+    enable: bool,
+    fullscreen: bool,
+    showsecond: bool,
+    fontsize: i32,
+}
+impl Default for ClockmodeConfigConfigfile {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            fullscreen: false,
+            showsecond: true,
+            fontsize: 100,
+        }
+    }
 }
 impl Default for ConfigFile {
     fn default() -> Self {
@@ -47,19 +67,10 @@ impl Default for ConfigFile {
             window_width: 200,
             window_height: 250,
             unit: "d".to_string(),
+            clockmode_settings: ClockmodeConfigConfigfile::default(),
         }
     }
 }
-
-fn change_fontsize(label: &Label, fontsize: i32) {
-    let attr_list = pango::AttrList::new();
-    let fontdesc =
-        pango::FontDescription::from_string(format!("Sans {}", fontsize.to_string()).as_str());
-    attr_list.insert(pango::AttrFontDesc::new(&fontdesc));
-
-    label.set_attributes(Some(&attr_list));
-}
-
 fn main() {
     let file_content = std::fs::read_to_string("config.yaml").unwrap_or_else(|e| {
         eprintln!("Failed to read config file: {}", e);
@@ -100,92 +111,107 @@ fn main() {
     let window_height = config.window_height;
     let unit = config.unit;
 
-    gtk::init().unwrap();
+    let clockmode = config.clockmode_settings;
+    let fullscreen = clockmode.fullscreen;
+    let enable_clockmode = clockmode.enable;
+    let show_second = clockmode.showsecond;
+    let clock_fontsize = clockmode.fontsize;
 
-    let glade_src = include_str!("../ui/main.glade");
-    let builder = Builder::new();
-    builder.add_from_string(glade_src).unwrap();
-    let main_window: Window = builder.object("main_window").unwrap();
-    let label1: Label = builder.object("l1").unwrap();
-    let label2: Label = builder.object("l2").unwrap();
-    let label3: Label = builder.object("l3").unwrap();
+    if enable_clockmode == false {
+        gtk::init().unwrap();
 
-    let exit_flag = Arc::new(AtomicBool::new(false));
-    let exit_flag_clone = exit_flag.clone();
-    let exit_flag_clone2 = exit_flag.clone();
-    let thread_exit_flag_clone = exit_flag.clone();
+        let glade_src = include_str!("../ui/main.glade");
+        let builder = Builder::new();
+        builder.add_from_string(glade_src).unwrap();
+        let main_window: Window = builder.object("main_window").unwrap();
+        let label1: Label = builder.object("l1").unwrap();
+        let label2: Label = builder.object("l2").unwrap();
+        let label3: Label = builder.object("l3").unwrap();
 
-    let label2_clone = label2.clone();
+        let exit_flag = Arc::new(AtomicBool::new(false));
+        let exit_flag_clone = exit_flag.clone();
+        let exit_flag_clone2 = exit_flag.clone();
+        let thread_exit_flag_clone = exit_flag.clone();
 
-    let (sender, receiver) = std::sync::mpsc::channel::<String>();
-    glib::timeout_add_local(
-        Duration::from_millis((interval as f64 * 0.8) as u64),
-        move || match receiver.try_recv() {
-            Ok(a) => {
-                label2_clone.set_text(a.as_str());
-                glib::ControlFlow::Continue
-            }
-            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-            Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
-        },
-    );
+        let label2_clone = label2.clone();
 
-    label1.set_text(header.as_str());
-    label3.set_text(footer.as_str());
-    main_window.set_title(window_title.as_str());
-    main_window.set_size_request(window_width, window_height);
-    label1.set_height_request((window_height as f64 * 0.2) as i32);
-    label2.set_height_request((window_height as f64 * 0.6) as i32);
-    label3.set_height_request((window_height as f64 * 0.2) as i32);
-    change_fontsize(&label1, header_fontsize);
-    change_fontsize(&label2, time_fontsize);
-    change_fontsize(&label3, footer_fontsize);
-
-    thread::spawn(move || {
-        let target_clone = target.clone();
-        let looptimer_start = Utc::now().timestamp_millis();
-        let mut repeat_times = 0;
-        loop {
-            let target_clone2 = target_clone.clone();
-            let looptimer_current = Utc::now().timestamp_millis();
-            if looptimer_current - (looptimer_start + ((repeat_times * interval) as i64)) >= 0 {
-                repeat_times += 1;
-                let target_timestamp =
-                    utils::convert_timestamp(target_clone2).unwrap_or_else(|e| {
-                        sender
-                            .send(format!("Failed to parse target time: {}", e))
-                            .unwrap();
-                        exit_flag_clone.store(true, Ordering::Relaxed);
-                        -1
-                    });
-                let current_timestamp = Utc::now().timestamp_millis();
-                let delta = (target_timestamp - current_timestamp) as f64;
-                let remaining =
-                    utils::convert_time_unit(delta, unit.as_str()).unwrap_or_else(|e| {
-                        sender.send(format!("{}", e)).unwrap();
-                        exit_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
-                        -1.0
-                    });
-                let rounded_remaining = utils::advanced_round(remaining, precision);
-                let formated_delta = utils::format_zeros(rounded_remaining, precision);
-                if !thread_exit_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                    sender.send(formated_delta).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel::<String>();
+        glib::timeout_add_local(
+            Duration::from_millis((interval as f64 * 0.8) as u64),
+            move || match receiver.try_recv() {
+                Ok(a) => {
+                    label2_clone.set_text(a.as_str());
+                    glib::ControlFlow::Continue
                 }
+                Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+            },
+        );
+
+        label1.set_text(header.as_str());
+        label3.set_text(footer.as_str());
+        main_window.set_title(window_title.as_str());
+        main_window.set_size_request(window_width, window_height);
+        clockmode::change_fontsize(&label1, header_fontsize);
+        clockmode::change_fontsize(&label2, time_fontsize);
+        clockmode::change_fontsize(&label3, footer_fontsize);
+
+        thread::spawn(move || {
+            let target_clone = target.clone();
+            let looptimer_start = Utc::now().timestamp_millis();
+            let mut repeat_times = 0;
+            loop {
+                let target_clone2 = target_clone.clone();
+                let looptimer_current = Utc::now().timestamp_millis();
+                if looptimer_current - (looptimer_start + ((repeat_times * interval) as i64)) >= 0 {
+                    repeat_times += 1;
+                    let target_timestamp =
+                        utils::convert_timestamp(target_clone2).unwrap_or_else(|e| {
+                            sender
+                                .send(format!("Failed to parse target time: {}", e))
+                                .unwrap();
+                            exit_flag_clone.store(true, Ordering::Relaxed);
+                            -1
+                        });
+                    let current_timestamp = Utc::now().timestamp_millis();
+                    let delta = (target_timestamp - current_timestamp) as f64;
+                    let remaining =
+                        utils::convert_time_unit(delta, unit.as_str()).unwrap_or_else(|e| {
+                            sender.send(format!("{}", e)).unwrap();
+                            exit_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+                            -1.0
+                        });
+                    let rounded_remaining = utils::advanced_round(remaining, precision);
+                    let formated_delta = utils::format_zeros(rounded_remaining, precision);
+                    if !thread_exit_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                        sender.send(formated_delta).unwrap();
+                    }
+                }
+                if thread_exit_flag_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis((interval as f64 * 0.8) as u64));
             }
-            if thread_exit_flag_clone.load(Ordering::Relaxed) {
-                break;
-            }
-            thread::sleep(Duration::from_millis((interval as f64 * 0.8) as u64));
-        }
-    });
+        });
 
-    main_window.connect_destroy(move |_| {
-        exit_flag_clone2.store(true, Ordering::Relaxed);
-        gtk::main_quit()
-    });
+        main_window.connect_destroy(move |_| {
+            exit_flag_clone2.store(true, Ordering::Relaxed);
+            gtk::main_quit()
+        });
 
-    main_window.set_resizable(false);
+        main_window.set_resizable(false);
 
-    main_window.show_all();
-    gtk::main();
+        main_window.show_all();
+        gtk::main();
+    } else {
+        let c = clockmode::ClockmodeConfig {
+            fullscreen,
+            winwidth: window_width,
+            winhet: window_height,
+            interval,
+            show_second,
+            font_size: clock_fontsize,
+        };
+        clockmode::clockmode_main(c);
+    }
 }

@@ -1,7 +1,6 @@
 // Copyright (C) 2024 CaSilicate
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-
 use chrono::{Datelike, NaiveDateTime, TimeZone, Timelike, Utc};
 use thiserror::Error;
 
@@ -52,9 +51,10 @@ impl SplitedTime {
     }
 
     pub fn to_string(self) -> String {
-        format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-            self.year, self.month, self.day,
-            self.hour, self.minute, self.second)
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            self.year, self.month, self.day, self.hour, self.minute, self.second
+        )
     }
 }
 
